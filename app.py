@@ -1,29 +1,34 @@
 from flask import Flask, request, jsonify
+from instagrapi import Client
 from flask_cors import CORS
-import instaloader
 
 app = Flask(__name__)
-CORS(app)
+CORS(app)  # Başka domainlerden istek kabul etmek için
 
-@app.route('/api/unfollowers', methods=['POST'])
-def get_unfollowers():
+@app.route('/api/not_following_back', methods=['POST'])
+def not_following_back():
     data = request.json
     username = data.get('username')
     password = data.get('password')
 
-    L = instaloader.Instaloader()
+    if not username or not password:
+        return jsonify({"error": "Username and password required"}), 400
+
+    cl = Client()
+
     try:
-        L.login(username, password)
+        cl.login(username, password)
+        user_id = cl.user_id_from_username(username)
+        followers = cl.user_followers(user_id)
+        following = cl.user_following(user_id)
+
+        not_following = [
+            following[uid].username for uid in following if uid not in followers
+        ]
+
+        return jsonify({"not_following_back": not_following})
     except Exception as e:
-        return jsonify({'error': str(e)}), 401
+        return jsonify({"error": str(e)}), 500
 
-    profile = instaloader.Profile.from_username(L.context, username)
-    followers = set(p.username for p in profile.get_followers())
-    followees = set(p.username for p in profile.get_followees())
-
-    not_following_back = list(followees - followers)
-
-    return jsonify({'not_following_back': not_following_back})
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run(debug=True)
